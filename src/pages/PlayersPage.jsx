@@ -2,8 +2,7 @@ import { useState } from 'react'
 import { Card, ErrorBox, Loading, PageTitle, PlayerDot, useLoader } from '../components/ui'
 import { useI18n } from '../i18n/I18nProvider'
 import { addPlayer, deletePlayer, fetchPlayers, updatePlayer } from '../lib/api'
-
-const COLORS = ['#059669', '#2563eb', '#7c3aed', '#db2777', '#dc2626', '#ea580c', '#ca8a04', '#0891b2', '#4b5563']
+import { PLAYER_COLORS as COLORS } from '../lib/scoring'
 
 export default function PlayersPage() {
   const { t } = useI18n()

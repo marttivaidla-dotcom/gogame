@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import ImportPanel from '../components/ImportPanel'
 import { Card, ErrorBox, GameBadge, GameTabs, Loading, PageTitle, PlayerDot, useLoader } from '../components/ui'
 import { useI18n } from '../i18n/I18nProvider'
 import { deleteGame, fetchGames } from '../lib/api'
@@ -7,12 +8,22 @@ import { GAMES, formatDate } from '../lib/scoring'
 export default function HistoryPage() {
   const { t } = useI18n()
   const [filter, setFilter] = useState(null)
+  const [importing, setImporting] = useState(false)
   const { data: games, error, loading, reload } = useLoader(() => fetchGames(filter), [filter])
 
   return (
     <div>
       <PageTitle subtitle={t('history.subtitle')}>{t('history.title')}</PageTitle>
-      <GameTabs value={filter} onChange={setFilter} includeAll />
+      {importing ? (
+        <ImportPanel onImported={reload} onClose={() => setImporting(false)} />
+      ) : (
+        <button type="button" onClick={() => setImporting(true)} className="mb-4 text-sm text-stone-500 hover:text-stone-900 hover:underline">
+          📥 {t('import.open')}
+        </button>
+      )}
+      <div>
+        <GameTabs value={filter} onChange={setFilter} includeAll />
+      </div>
       <ErrorBox>{error}</ErrorBox>
 
       {loading ? (

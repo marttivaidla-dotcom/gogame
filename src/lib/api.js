@@ -1,4 +1,6 @@
 import { supabase, isSupabaseConfigured } from './supabase'
+import { gameSignature } from './legacyImport'
+import { PLAYER_COLORS } from './scoring'
 
 const STORAGE_KEY = 'skoorivihik:data:v1'
 
@@ -178,6 +180,50 @@ export async function deleteGame(id) {
     return
   }
   return unwrap(await supabase.from('games').delete().eq('id', id))
+}
+
+// ---------- Import ----------
+// games: parseLegacyWingspan() väljund. Puuduvad mängijad luuakse nime järgi.
+// Juba olemasolevaid mänge (sama kuupäev, mängijad ja summad) ei lisata uuesti,
+// arvestades kordusi: kui andmebaasis on sama mäng 1 kord ja impordis 2 korda, lisatakse 1.
+export async function importGames(gameType, games, onProgress) {
+  const key = (name) => name.trim().toLocaleLowerCase('et')
+  const players = await fetchPlayers()
+  const byName = new Map(players.map((p) => [key(p.name), p]))
+  let playersCreated = 0
+  for (const name of new Set(games.flatMap((g) => g.scores.map((s) => s.name)))) {
+    if (byName.has(key(name))) continue
+    const color = PLAYER_COLORS[(players.length + playersCreated) % PLAYER_COLORS.length]
+    byName.set(key(name), await addPlayer(name, color))
+    playersCreated += 1
+  }
+
+  const existing = new Map()
+  for (const g of await fetchGames(gameType)) {
+    const scores = g.game_scores.filter((s) => s.player).map((s) => ({ name: s.player.name, total: s.total }))
+    const sig = gameSignature(g.played_at, scores)
+    existing.set(sig, (existing.get(sig) ?? 0) + 1)
+  }
+
+  let imported = 0
+  let skipped = 0
+  for (const [i, game] of games.entries()) {
+    const sig = gameSignature(game.date, game.scores)
+    if (existing.get(sig) > 0) {
+      existing.set(sig, existing.get(sig) - 1)
+      skipped += 1
+    } else {
+      await createGame({
+        gameType,
+        playedAt: game.date,
+        notes: '',
+        scores: game.scores.map((s) => ({ player_id: byName.get(key(s.name)).id, breakdown: s.breakdown })),
+      })
+      imported += 1
+    }
+    onProgress?.(i + 1)
+  }
+  return { imported, skipped, playersCreated }
 }
 
 // ---------- Statistika ----------

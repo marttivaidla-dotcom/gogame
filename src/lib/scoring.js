@@ -126,6 +126,8 @@ export const GAMES = {
 
 export const GAME_LIST = Object.values(GAMES)
 
+export const PLAYER_COLORS = ['#059669', '#2563eb', '#7c3aed', '#db2777', '#dc2626', '#ea580c', '#ca8a04', '#0891b2', '#4b5563']
+
 export function toInt(value) {
   const n = parseInt(value, 10)
   return Number.isFinite(n) ? n : 0
