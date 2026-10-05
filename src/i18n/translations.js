@@ -132,8 +132,8 @@ export const translations = {
   },
 
   en: {
-    'app.name': 'Game Journal',
-    'app.docTitle': 'Game Journal – Wingspan & Wyrmspan',
+    'app.name': 'Scorebook',
+    'app.docTitle': 'Scorebook – Wingspan & Wyrmspan',
     'nav.newGame': 'New game',
     'nav.history': 'History',
     'nav.stats': 'Statistics',
