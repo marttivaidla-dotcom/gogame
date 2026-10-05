@@ -3,9 +3,14 @@ import { categoryPoints, computeBreakdown, placements, sumBreakdown } from '../l
 import { PlayerDot } from './ui'
 
 const inputClass =
-  'w-full min-w-0 rounded-md border border-stone-300 bg-white px-1.5 py-1.5 text-right text-base tabular-nums sm:min-w-14 sm:px-2 sm:text-sm focus:border-stone-500 focus:outline-none focus:ring-2 focus:ring-stone-300'
+  'w-full min-w-14 rounded-md border border-stone-300 bg-white px-2 py-1.5 text-right tabular-nums focus:border-stone-500 focus:outline-none focus:ring-2 focus:ring-stone-300'
+
+// Ainult numbrid: tekstiväli numbriklaviatuuriga, muud märgid eemaldatakse
+const numberProps = { type: 'text', inputMode: 'numeric', pattern: '[0-9]*', autoComplete: 'off' }
+const digitsOnly = (value) => value.replace(/\D/g, '')
 
 // Tabel: read = punktikategooriad, veerud = mängijad.
+// Kerimisel jäävad päis (mängijad), esimene veerg (kategooriad) ja kokkuvõtte rida paigale.
 // inputs kuju: { [playerId]: { [categoryKey]: "12" | { coins: "3", items: "9" } } }
 export default function ScoreCalculator({ game, categories, players, inputs, onChange }) {
   const { t, tr } = useI18n()
@@ -18,16 +23,16 @@ export default function ScoreCalculator({ game, categories, players, inputs, onC
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-stone-200 bg-white">
+    <div className="max-h-[75dvh] overflow-auto overscroll-contain rounded-lg border border-stone-200 bg-white">
       <table className="w-full border-collapse text-sm">
         <thead>
           <tr className={game.theme.soft}>
-            <th className="sticky left-0 z-10 bg-inherit px-2 py-2 text-left font-semibold sm:px-3">{t('calc.category')}</th>
+            <th className="sticky left-0 top-0 z-30 bg-inherit px-3 py-2 text-left font-semibold">{t('calc.category')}</th>
             {players.map((p) => (
-              <th key={p.id} className="px-1 py-2 text-center text-xs font-semibold sm:px-2 sm:text-sm">
-                <span className="inline-flex max-w-16 flex-col items-center gap-0.5 sm:max-w-none sm:flex-row sm:gap-1.5">
+              <th key={p.id} className="sticky top-0 z-20 whitespace-nowrap bg-inherit px-2 py-2 text-center font-semibold">
+                <span className="inline-flex items-center gap-1.5">
                   <PlayerDot color={p.color} />
-                  <span className="max-w-full truncate" title={p.name}>{p.name}</span>
+                  {p.name}
                 </span>
               </th>
             ))}
@@ -36,49 +41,43 @@ export default function ScoreCalculator({ game, categories, players, inputs, onC
         <tbody>
           {categories.map((c) => (
             <tr key={c.key} className="border-t border-stone-100">
-              <th className="sticky left-0 z-10 w-24 bg-white px-2 py-2 text-left text-xs font-medium sm:w-auto sm:px-3 sm:text-sm">
+              <th className="sticky left-0 z-10 bg-white px-3 py-2 text-left font-medium">
                 {tr(c.label)}
-                <div className="hidden max-w-52 text-xs font-normal text-stone-400 sm:block">{tr(c.hint)}</div>
+                <div className="max-w-52 text-xs font-normal text-stone-400">{tr(c.hint)}</div>
               </th>
               {players.map((p) => {
                 const value = inputs[p.id]?.[c.key]
                 return (
-                  <td key={p.id} className="px-1 py-2 align-top sm:px-2">
+                  <td key={p.id} className="px-2 py-2 align-top">
                     {c.kind === 'coinsItems' ? (
                       <div className="space-y-1">
-                        <label className="flex flex-col gap-0.5 text-xs text-stone-500 sm:flex-row sm:items-center sm:gap-1">
-                          <span className="sm:w-12">{t('calc.coins')}</span>
+                        <label className="flex items-center gap-1 text-xs text-stone-500">
+                          <span className="w-12">{t('calc.coins')}</span>
                           <input
-                            type="number"
-                            inputMode="numeric"
-                            min="0"
+                            {...numberProps}
                             className={inputClass}
                             value={value?.coins ?? ''}
-                            onChange={(e) => setValue(p.id, c.key, { ...value, coins: e.target.value })}
+                            onChange={(e) => setValue(p.id, c.key, { ...value, coins: digitsOnly(e.target.value) })}
                           />
                         </label>
-                        <label className="flex flex-col gap-0.5 text-xs text-stone-500 sm:flex-row sm:items-center sm:gap-1">
-                          <span className="sm:w-12">{t('calc.items')}</span>
+                        <label className="flex items-center gap-1 text-xs text-stone-500">
+                          <span className="w-12">{t('calc.items')}</span>
                           <input
-                            type="number"
-                            inputMode="numeric"
-                            min="0"
+                            {...numberProps}
                             className={inputClass}
                             value={value?.items ?? ''}
-                            onChange={(e) => setValue(p.id, c.key, { ...value, items: e.target.value })}
+                            onChange={(e) => setValue(p.id, c.key, { ...value, items: digitsOnly(e.target.value) })}
                           />
                         </label>
                         <div className="text-right text-xs font-semibold text-stone-600">= {categoryPoints(c, value)} p</div>
                       </div>
                     ) : (
                       <input
-                        type="number"
-                        inputMode="numeric"
-                        min="0"
+                        {...numberProps}
                         placeholder="0"
                         className={inputClass}
                         value={value ?? ''}
-                        onChange={(e) => setValue(p.id, c.key, e.target.value)}
+                        onChange={(e) => setValue(p.id, c.key, digitsOnly(e.target.value))}
                       />
                     )}
                   </td>
@@ -89,10 +88,10 @@ export default function ScoreCalculator({ game, categories, players, inputs, onC
         </tbody>
         <tfoot>
           <tr className={`border-t-2 border-stone-300 ${game.theme.soft}`}>
-            <th className="sticky left-0 z-10 bg-inherit px-2 py-3 text-left text-sm font-bold sm:px-3 sm:text-base">{t('calc.total')}</th>
+            <th className="sticky bottom-0 left-0 z-30 bg-inherit px-3 py-3 text-left text-base font-bold">{t('calc.total')}</th>
             {players.map((p, i) => (
-              <td key={p.id} className="px-1 py-3 text-center sm:px-2">
-                <div className="text-lg font-bold tabular-nums sm:text-xl">{totals[i]}</div>
+              <td key={p.id} className="sticky bottom-0 z-20 bg-inherit px-2 py-3 text-center">
+                <div className="text-xl font-bold tabular-nums">{totals[i]}</div>
                 {hasScores && players.length > 1 && (
                   <div className={`text-xs font-semibold ${places[i] === 1 ? game.theme.text : 'text-stone-400'}`}>
                     {t('calc.place', { n: places[i] })}

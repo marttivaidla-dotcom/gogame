@@ -124,28 +124,28 @@ function GameCard({ game, onDeleted }) {
             </p>
           )}
           <div className="overflow-x-auto">
-            <table className="w-full text-xs sm:text-sm">
+            <table className="w-full text-sm">
               <thead>
                 <tr className="text-stone-500">
-                  <th className="sticky left-0 bg-white py-1 pr-2 text-left font-medium sm:pr-3">{t('calc.category')}</th>
+                  <th className="sticky left-0 bg-white py-1 pr-3 text-left font-medium">{t('calc.category')}</th>
                   {scores.map((s) => (
-                    <th key={s.id} className="max-w-16 truncate px-1 py-1 text-right font-medium sm:max-w-none sm:px-2" title={s.player.name}>{s.player.name}</th>
+                    <th key={s.id} className="px-2 py-1 text-right font-medium">{s.player.name}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {categories.map((c) => (
                   <tr key={c.key} className="border-t border-stone-100">
-                    <td className="sticky left-0 bg-white py-1 pr-2 sm:pr-3">{tr(c.label)}</td>
+                    <td className="sticky left-0 bg-white py-1 pr-3">{tr(c.label)}</td>
                     {scores.map((s) => (
-                      <td key={s.id} className="px-1 py-1 text-right tabular-nums sm:px-2">{s.breakdown[c.key] ?? 0}</td>
+                      <td key={s.id} className="px-2 py-1 text-right tabular-nums">{s.breakdown[c.key] ?? 0}</td>
                     ))}
                   </tr>
                 ))}
                 <tr className="border-t-2 border-stone-300 font-bold">
-                  <td className="sticky left-0 bg-white py-1 pr-2 sm:pr-3">{t('calc.total')}</td>
+                  <td className="sticky left-0 bg-white py-1 pr-3">{t('calc.total')}</td>
                   {scores.map((s) => (
-                    <td key={s.id} className="px-1 py-1 text-right tabular-nums sm:px-2">{s.total}</td>
+                    <td key={s.id} className="px-2 py-1 text-right tabular-nums">{s.total}</td>
                   ))}
                 </tr>
               </tbody>

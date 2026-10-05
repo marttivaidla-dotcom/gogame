@@ -286,12 +286,12 @@ function CategoryAverages({ def, games }) {
       <h2 className="font-semibold">{t('stats.categoryAverages')}</h2>
       <p className="mb-3 text-sm text-stone-500">{t('stats.categoryHelp', { n: MIN_GAMES })}</p>
       <div className="overflow-x-auto">
-        <table className="w-full text-xs sm:text-sm">
+        <table className="w-full text-sm">
           <thead>
             <tr className="text-stone-500">
-              <th className="sticky left-0 bg-white py-2 pr-2 text-left font-medium sm:pr-3">{t('calc.category')}</th>
+              <th className="sticky left-0 bg-white py-2 pr-3 text-left font-medium">{t('calc.category')}</th>
               {byPlayer.map(({ player }) => (
-                <th key={player.id} className="max-w-16 truncate px-1 py-2 text-right font-medium sm:max-w-none sm:px-2" title={player.name}>{player.name}</th>
+                <th key={player.id} className="px-2 py-2 text-right font-medium">{player.name}</th>
               ))}
             </tr>
           </thead>
@@ -304,11 +304,11 @@ function CategoryAverages({ def, games }) {
               const top = Math.max(...values.filter((v) => v !== null), 0)
               return (
                 <tr key={c.key} className="border-t border-stone-100">
-                  <td className="sticky left-0 bg-white py-2 pr-2 sm:pr-3">{tr(c.label)}</td>
+                  <td className="sticky left-0 bg-white py-2 pr-3">{tr(c.label)}</td>
                   {values.map((v, i) => (
                     <td
                       key={byPlayer[i].player.id}
-                      className={`px-1 py-2 text-right tabular-nums sm:px-2 ${v !== null && v === top && byPlayer.length > 1 && v > 0 ? 'font-bold text-stone-900' : 'text-stone-600'}`}
+                      className={`px-2 py-2 text-right tabular-nums ${v !== null && v === top && byPlayer.length > 1 && v > 0 ? 'font-bold text-stone-900' : 'text-stone-600'}`}
                     >
                       {v === null ? '–' : v.toFixed(1)}
                     </td>
