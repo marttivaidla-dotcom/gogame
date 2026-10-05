@@ -9,8 +9,8 @@ const englishOrdinal = (n) => {
 
 export const translations = {
   et: {
-    'app.name': 'Skoorivihik',
-    'app.docTitle': 'Wingspan & Wyrmspan skoorid',
+    'app.name': 'Mängupäevik',
+    'app.docTitle': 'Mängupäevik – Wingspan & Wyrmspan',
     'nav.newGame': 'Uus mäng',
     'nav.history': 'Ajalugu',
     'nav.stats': 'Statistika',
@@ -132,8 +132,8 @@ export const translations = {
   },
 
   en: {
-    'app.name': 'Scorebook',
-    'app.docTitle': 'Wingspan & Wyrmspan scores',
+    'app.name': 'Game Journal',
+    'app.docTitle': 'Game Journal – Wingspan & Wyrmspan',
     'nav.newGame': 'New game',
     'nav.history': 'History',
     'nav.stats': 'Statistics',

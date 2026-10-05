@@ -1,4 +1,4 @@
-# 🐦🐉 Skoorivihik – Wingspan & Wyrmspan
+# Mängupäevik – Wingspan & Wyrmspan
 
 Veebirakendus lauamängude **Wingspan** ja **Wyrmspan** tulemuste sisestamiseks, ajaloo vaatamiseks ja statistika jaoks.
 Vaikimisi salvestatakse andmed kasutatava brauseri `localStorage`-isse, nii et rakenduse saab kohe käivitada.
