@@ -1,20 +1,24 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useI18n } from '../i18n/I18nProvider'
 import { GAMES, GAME_LIST } from '../lib/scoring'
 
-// Laeb andmed asünkroonselt ja annab tagasi { data, error, loading, reload }
+// Laeb andmed asünkroonselt ja annab tagasi { data, error, loading, reload }.
+// Kui päringuid tehakse kiiresti järjest (nt filtri vahetus), jääb kehtima ainult viimase vastus.
 export function useLoader(loader, deps = []) {
   const [state, setState] = useState({ data: null, error: null, loading: true })
+  const requestId = useRef(0)
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const load = useCallback(loader, deps)
 
   const reload = useCallback(async () => {
+    const id = ++requestId.current
     setState((s) => ({ ...s, loading: true, error: null }))
     try {
-      setState({ data: await load(), error: null, loading: false })
+      const data = await load()
+      if (id === requestId.current) setState({ data, error: null, loading: false })
     } catch (e) {
-      setState({ data: null, error: e.message, loading: false })
+      if (id === requestId.current) setState({ data: null, error: e.message, loading: false })
     }
   }, [load])
 
@@ -35,7 +39,7 @@ export function PageTitle({ children, subtitle }) {
 }
 
 export function Card({ className = '', children }) {
-  return <div className={`rounded-xl border border-stone-200 bg-white p-4 shadow-sm ${className}`}>{children}</div>
+  return <div className={`rounded-lg border border-stone-200 bg-white p-4 ${className}`}>{children}</div>
 }
 
 // children võib olla tõlkevõti (nt 'errors.duplicateName') või valmis tekst
@@ -57,8 +61,19 @@ export function Loading() {
 export function GameBadge({ gameType }) {
   const g = GAMES[gameType]
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${g.theme.badge}`}>
-      {g.icon} {g.name}
+    <span className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold ${g.theme.badge}`}>{g.name}</span>
+  )
+}
+
+// Koha number väikese märgina; 1. koht on esile tõstetud
+export function PlaceBadge({ place }) {
+  return (
+    <span
+      className={`inline-grid h-5 min-w-5 place-items-center rounded px-1 text-xs font-semibold tabular-nums ${
+        place === 1 ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-500'
+      }`}
+    >
+      {place}
     </span>
   )
 }
@@ -70,19 +85,20 @@ export function PlayerDot({ color }) {
 // Wingspan / Wyrmspan valik (valikuliselt ka "Kõik")
 export function GameTabs({ value, onChange, includeAll = false }) {
   const { t } = useI18n()
-  const options = [...(includeAll ? [{ key: null, name: t('common.all'), icon: '🎲' }] : []), ...GAME_LIST]
+  const options = [...(includeAll ? [{ key: null, name: t('common.all') }] : []), ...GAME_LIST]
   return (
-    <div className="mb-6 inline-flex rounded-xl bg-stone-200/60 p-1">
+    <div className="mb-6 inline-flex rounded-lg bg-stone-200/60 p-1">
       {options.map((o) => (
         <button
           key={o.key ?? 'all'}
           type="button"
           onClick={() => onChange(o.key)}
-          className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${
+          aria-pressed={value === o.key}
+          className={`rounded-md px-4 py-1.5 text-sm font-medium transition ${
             value === o.key ? 'bg-white shadow-sm' : 'text-stone-600 hover:text-stone-900'
           }`}
         >
-          {o.icon} {o.name}
+          {o.name}
         </button>
       ))}
     </div>

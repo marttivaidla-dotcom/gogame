@@ -2,6 +2,14 @@
 
 Veebirakendus lauamängude **Wingspan** ja **Wyrmspan** tulemuste sisestamiseks, ajaloo vaatamiseks ja statistika jaoks.
 Vaikimisi salvestatakse andmed kasutatava brauseri `localStorage`-isse, nii et rakenduse saab kohe käivitada.
+
+- **Uus mäng / muutmine:** punktid kategooriate kaupa; salvestatud mängu saab ajaloos avada ja muuta (`/mang/:id/muuda`).
+- **Ajalugu:** mängud mänguõhtute kaupa, iga mängu punktijaotus, muutmine ja kustutamine.
+- **Statistika:** edetabel (võidu %, viimased 5 kohta), omavaheline seis kahe mängija vahel, rekordid,
+  taseme muutus ajas (10 mängu libisev keskmine) ja keskmised punktid kategooriate kaupa.
+- **Varasemad mängud:** 122 Wingspani mängu vanast skooritabelist on failis `src/data/wingspanHistory.js`.
+  Brauseri salvestus algab nendega automaatselt; Supabase'i lisatakse need ajaloo lehelt nupuga
+  „Lisa varasemad Wingspani mängud“ (juba olemas olevaid mänge uuesti ei lisata). Samast kohast saab kleepida ka vana tabeli.
 Soovi korral saab seadistada Supabase'i (PostgreSQL), et jagada andmeid eri seadmete ja kasutajate vahel.
 
 **Tehnoloogiad:** React 19 + Vite, Tailwind CSS v4, React Router, valikuline Supabase (`supabase-js`), hostimine Vercelis.

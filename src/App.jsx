@@ -11,6 +11,7 @@ export default function App() {
       <Route element={<Layout />}>
         <Route index element={<Navigate to="/uus-mang" replace />} />
         <Route path="uus-mang" element={<NewGamePage />} />
+        <Route path="mang/:id/muuda" element={<NewGamePage />} />
         <Route path="ajalugu" element={<HistoryPage />} />
         <Route path="statistika" element={<StatsPage />} />
         <Route path="mangijad" element={<PlayersPage />} />

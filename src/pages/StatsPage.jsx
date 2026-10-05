@@ -1,19 +1,18 @@
 import { useState } from 'react'
-import { Card, ErrorBox, GameTabs, Loading, PageTitle, PlayerDot, useLoader } from '../components/ui'
+import TrendChart from '../components/TrendChart'
+import { Card, ErrorBox, GameTabs, Loading, PageTitle, PlaceBadge, PlayerDot, useLoader } from '../components/ui'
 import { useI18n } from '../i18n/I18nProvider'
-import { fetchGames, fetchPlayerStats } from '../lib/api'
+import { fetchGames } from '../lib/api'
 import { GAMES, formatDate } from '../lib/scoring'
+import { headToHead, mostFrequentPair, playerSummaries, records, rollingAverages } from '../lib/stats'
+
+// Alla selle mängude arvu on mängija edetabelis eraldi, sest võidu % on juhuslik
+const MIN_GAMES = 5
 
 export default function StatsPage() {
   const { t } = useI18n()
   const [gameType, setGameType] = useState('wingspan')
-  const { data, error, loading } = useLoader(
-    async () => {
-      const [stats, games, allGames] = await Promise.all([fetchPlayerStats(gameType), fetchGames(gameType), fetchGames()])
-      return { stats, games, allGames }
-    },
-    [gameType],
-  )
+  const { data: games, error, loading } = useLoader(() => fetchGames(gameType), [gameType])
 
   return (
     <div>
@@ -22,60 +21,252 @@ export default function StatsPage() {
       <ErrorBox>{error}</ErrorBox>
       {loading ? (
         <Loading />
+      ) : games?.length === 0 ? (
+        <p className="py-8 text-center text-stone-400">{t('stats.empty', { game: GAMES[gameType].name })}</p>
       ) : (
-        data && (
-          <>
-            <GameCountOverview games={data.allGames} />
-            {data.games.length === 0 ? (
-              <p className="py-8 text-center text-stone-400">{t('stats.empty', { game: GAMES[gameType].name })}</p>
-            ) : (
-              <StatsContent gameType={gameType} stats={data.stats} games={data.games} />
-            )}
-          </>
-        )
+        games && <StatsContent key={gameType} gameType={gameType} games={games} />
       )}
     </div>
   )
 }
 
-function GameCountOverview({ games }) {
-  const { t } = useI18n()
-  const wingspan = games.filter((game) => game.game_type === 'wingspan').length
-  const wyrmspan = games.filter((game) => game.game_type === 'wyrmspan').length
+function StatsContent({ gameType, games }) {
+  const { t, locale } = useI18n()
+  const def = GAMES[gameType]
+  const summaries = playerSummaries(games)
+  const rec = records(games, def.categories.filter((c) => !c.expansion))
+  const trend = rollingAverages(games)
+
   return (
-    <div className="mb-6 grid grid-cols-3 gap-3">
-      <CountCard label={t('stats.wingspanGames')} count={wingspan} />
-      <CountCard label={t('stats.wyrmspanGames')} count={wyrmspan} />
-      <CountCard label={t('stats.allGames')} count={games.length} />
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Stat label={t('stats.totalGames')} value={games.length} />
+        <Stat label={t('stats.nights')} value={rec.nights} />
+        <Stat label={t('stats.avgWinning')} value={rec.avgWinning == null ? '–' : Math.round(rec.avgWinning)} />
+        <Stat
+          label={t('stats.record')}
+          value={rec.top.total}
+          note={`${rec.top.player.name} · ${formatDate(rec.top.date, locale)}`}
+        />
+      </div>
+
+      <Leaderboard summaries={summaries} />
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <HeadToHead games={games} summaries={summaries} />
+        <Records rec={rec} />
+      </div>
+
+      {trend.length > 0 && (
+        <Card>
+          <h2 className="font-semibold">{t('stats.trendTitle')}</h2>
+          <p className="mb-4 text-sm text-stone-500">{t('stats.trendHelp')}</p>
+          <TrendChart series={trend} />
+        </Card>
+      )}
+
+      <CategoryAverages def={def} games={games} />
     </div>
   )
 }
 
-function CountCard({ label, count }) {
+function Stat({ label, value, note }) {
   return (
     <Card>
       <div className="text-xs text-stone-500 sm:text-sm">{label}</div>
-      <div className="text-2xl font-bold tabular-nums sm:text-3xl">{count}</div>
+      <div className="text-2xl font-bold tabular-nums sm:text-3xl">{value}</div>
+      {note && <div className="mt-1 text-xs text-stone-500">{note}</div>}
     </Card>
   )
 }
 
-function StatsContent({ gameType, stats, games }) {
-  const { t, tr, lang, locale } = useI18n()
-  const def = GAMES[gameType]
-  const allScores = games.flatMap((g) =>
-    g.game_scores.map((s) => ({ ...s, played_at: g.played_at, expansions: g.expansions ?? [] })),
+function Leaderboard({ summaries }) {
+  const { t } = useI18n()
+  const byWinPct = (a, b) => b.winPct - a.winPct || b.avg - a.avg
+  const regular = summaries.filter((s) => s.games >= MIN_GAMES).sort(byWinPct)
+  const occasional = summaries.filter((s) => s.games < MIN_GAMES).sort((a, b) => b.games - a.games || byWinPct(a, b))
+
+  const row = (s, muted) => (
+    <tr key={s.player.id} className={`border-t border-stone-100 ${muted ? 'text-stone-500' : ''}`}>
+      <td className="py-2 pr-3">
+        <span className="inline-flex items-center gap-2 font-medium">
+          <PlayerDot color={s.player.color} /> {s.player.name}
+        </span>
+      </td>
+      <td className="px-2 py-2 text-right tabular-nums">{s.games}</td>
+      <td className="px-2 py-2 text-right tabular-nums">{s.wins}</td>
+      <td className="px-2 py-2 text-right tabular-nums">{Math.round(s.winPct * 100)}%</td>
+      <td className="px-2 py-2 text-right tabular-nums">{s.avg.toFixed(1)}</td>
+      <td className="px-2 py-2 text-right tabular-nums">{s.best}</td>
+      <td className="py-2 pl-2">
+        <span className="inline-flex gap-1">
+          {s.places.slice(-5).map((p, i) => (
+            <PlaceBadge key={i} place={p} />
+          ))}
+        </span>
+      </td>
+    </tr>
   )
-  const best = allScores.reduce((a, b) => (b.total > (a?.total ?? -Infinity) ? b : a), null)
-  const multiplayer = games.filter((g) => g.game_scores.length > 1)
-  const avgWinning = multiplayer.length
-    ? Math.round(multiplayer.reduce((sum, g) => sum + Math.max(...g.game_scores.map((s) => s.total)), 0) / multiplayer.length)
-    : '–'
 
-  const leaderboard = [...stats].sort((a, b) => b.wins - a.wins || b.avg_score - a.avg_score)
-  const maxAvg = Math.max(...leaderboard.map((s) => Number(s.avg_score)), 1)
+  return (
+    <Card>
+      <h2 className="font-semibold">{t('stats.leaderboard')}</h2>
+      <p className="mb-3 text-sm text-stone-500">{t('stats.leaderboardHelp', { n: MIN_GAMES })}</p>
+      <div className="overflow-x-auto">
+        <table className="w-full whitespace-nowrap text-sm">
+          <thead>
+            <tr className="text-left text-stone-500">
+              <th className="py-2 pr-3 font-medium">{t('stats.player')}</th>
+              <th className="px-2 py-2 text-right font-medium">{t('stats.games')}</th>
+              <th className="px-2 py-2 text-right font-medium">{t('stats.wins')}</th>
+              <th className="px-2 py-2 text-right font-medium">{t('stats.winPct')}</th>
+              <th className="px-2 py-2 text-right font-medium">{t('stats.average')}</th>
+              <th className="px-2 py-2 text-right font-medium">{t('stats.best')}</th>
+              <th className="py-2 pl-2 font-medium">{t('stats.lastFive')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {regular.map((s) => row(s, false))}
+            {occasional.length > 0 && (
+              <tr className="border-t border-stone-200">
+                <td colSpan={7} className="pb-1 pt-4 text-xs font-medium uppercase tracking-wide text-stone-400">
+                  {t('stats.fewGames', { n: MIN_GAMES })}
+                </td>
+              </tr>
+            )}
+            {occasional.map((s) => row(s, true))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  )
+}
 
-  // Keskmised punktid kategooriate kaupa iga mängija kohta
+function HeadToHead({ games, summaries }) {
+  const { t } = useI18n()
+  const [defaultA, defaultB] = mostFrequentPair(games)
+  const [aId, setA] = useState(defaultA)
+  const [bId, setB] = useState(defaultB)
+  if (!defaultA) return null
+  const a = summaries.find((s) => s.player.id === aId)?.player
+  const b = summaries.find((s) => s.player.id === bId)?.player
+  const h = a && b && aId !== bId ? headToHead(games, aId, bId) : null
+  const select = (value, onChange, id) => (
+    <select
+      id={id}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="rounded-md border border-stone-300 bg-white px-2 py-1.5 text-sm"
+    >
+      {[...summaries].sort((x, y) => y.games - x.games).map((s) => (
+        <option key={s.player.id} value={s.player.id}>{s.player.name}</option>
+      ))}
+    </select>
+  )
+
+  return (
+    <Card>
+      <h2 className="mb-3 font-semibold">{t('stats.h2hTitle')}</h2>
+      <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
+        {select(aId, setA, 'h2h-a')}
+        <span className="text-stone-400">–</span>
+        {select(bId, setB, 'h2h-b')}
+      </div>
+      {!h || h.games === 0 ? (
+        <p className="text-sm text-stone-500">{t('stats.h2hNone')}</p>
+      ) : (
+        <>
+          <div className="flex items-end justify-between">
+            <div>
+              <div className="text-sm text-stone-500">{a.name}</div>
+              <div className="text-4xl font-bold tabular-nums">{h.aWins}</div>
+            </div>
+            <div className="pb-1 text-center text-sm text-stone-500">
+              {t('stats.h2hGames', { n: h.games })}
+              <br />
+              {t('stats.h2hTies', { n: h.ties })}
+            </div>
+            <div className="text-right">
+              <div className="text-sm text-stone-500">{b.name}</div>
+              <div className="text-4xl font-bold tabular-nums">{h.bWins}</div>
+            </div>
+          </div>
+          <div className="mt-3 flex h-2 gap-0.5 overflow-hidden rounded-full">
+            <div style={{ flex: h.aWins, backgroundColor: a.color }} />
+            {h.ties > 0 && <div className="bg-stone-200" style={{ flex: h.ties }} />}
+            <div style={{ flex: h.bWins, backgroundColor: b.color }} />
+          </div>
+          <p className="mt-3 text-sm text-stone-600">
+            {t('stats.h2hDiff', { n: Math.abs(h.avgDiff).toFixed(1), name: h.avgDiff >= 0 ? a.name : b.name })}
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-1 text-xs">
+            <span className="mr-1 text-stone-500">{t('stats.h2hLast')}</span>
+            {h.sequence.slice(-10).map((w, i) => {
+              const p = w === 'a' ? a : w === 'b' ? b : null
+              return (
+                <span
+                  key={i}
+                  title={p?.name ?? t('history.tie')}
+                  className="inline-grid h-6 w-6 place-items-center rounded-full font-semibold text-white"
+                  style={{ backgroundColor: p?.color ?? '#d6d3d1' }}
+                >
+                  {p ? p.name.slice(0, 2) : '='}
+                </span>
+              )
+            })}
+          </div>
+        </>
+      )}
+    </Card>
+  )
+}
+
+function Records({ rec }) {
+  const { t, tr, locale } = useI18n()
+  const items = [
+    ...rec.categories.map(({ category, score }) => ({
+      label: t('stats.recordCategory', { category: tr(category.label) }),
+      value: Number(score.breakdown[category.key]) || 0,
+      who: score.player.name,
+      date: score.date,
+    })),
+    rec.biggestWin && {
+      label: t('stats.biggestWin'),
+      value: `${rec.biggestWin.margin} p`,
+      who: rec.biggestWin.winner?.name,
+      date: rec.biggestWin.date,
+    },
+  ].filter(Boolean)
+
+  return (
+    <Card>
+      <h2 className="mb-1 font-semibold">{t('stats.records')}</h2>
+      <dl className="divide-y divide-stone-100 text-sm">
+        {items.map((item) => (
+          <div key={item.label} className="flex items-baseline justify-between gap-4 py-2">
+            <dt>
+              {item.label}
+              <span className="block text-xs text-stone-500">
+                {item.who} · {formatDate(item.date, locale)}
+              </span>
+            </dt>
+            <dd className="text-lg font-semibold tabular-nums">{item.value}</dd>
+          </div>
+        ))}
+        <div className="flex items-baseline justify-between gap-4 py-2">
+          <dt>{t('stats.ties')}</dt>
+          <dd className="text-lg font-semibold tabular-nums">{rec.ties}</dd>
+        </div>
+      </dl>
+    </Card>
+  )
+}
+
+function CategoryAverages({ def, games }) {
+  const { t, tr, lang } = useI18n()
+  const allScores = games.flatMap((g) =>
+    g.game_scores.filter((s) => s.player).map((s) => ({ ...s, expansions: g.expansions ?? [] })),
+  )
   const categories = def.categories.filter((c) => !c.expansion || allScores.some((s) => Object.hasOwn(s.breakdown, c.key)))
   const byPlayer = Object.values(
     allScores.reduce((acc, s) => {
@@ -83,121 +274,52 @@ function StatsContent({ gameType, stats, games }) {
       entry.rows.push({ breakdown: s.breakdown, expansions: s.expansions })
       return acc
     }, {}),
-  ).sort((a, b) => a.player.name.localeCompare(b.player.name, lang))
-  const avg = (rows, key) => rows.length
-    ? (rows.reduce((sum, r) => sum + (Number(r[key]) || 0), 0) / rows.length).toFixed(1)
-    : null
+  )
+    .filter((p) => p.rows.length >= MIN_GAMES)
+    .sort((a, b) => b.rows.length - a.rows.length || a.player.name.localeCompare(b.player.name, lang))
+  const avg = (rows, key) => (rows.length ? rows.reduce((sum, r) => sum + (Number(r[key]) || 0), 0) / rows.length : null)
+
+  if (byPlayer.length === 0) return null
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Card>
-          <div className="text-sm text-stone-500">{t('stats.totalGames')}</div>
-          <div className="text-3xl font-bold">{games.length}</div>
-        </Card>
-        <Card>
-          <div className="text-sm text-stone-500">{t('stats.avgWinning')}</div>
-          <div className="text-3xl font-bold">{avgWinning}</div>
-        </Card>
-        <Card>
-          <div className="text-sm text-stone-500">{t('stats.record')}</div>
-          <div className="text-3xl font-bold">{best?.total}</div>
-          {best && (
-            <div className="mt-1 text-xs text-stone-500">
-              {best.player.name} · {formatDate(best.played_at, locale)}
-            </div>
-          )}
-        </Card>
-      </div>
-
-      <Card>
-        <h2 className="mb-3 font-semibold">{t('stats.leaderboard')}</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-stone-500">
-                <th className="py-2 pr-3 font-medium">{t('stats.player')}</th>
-                <th className="px-2 py-2 text-right font-medium">{t('stats.games')}</th>
-                <th className="px-2 py-2 text-right font-medium">{t('stats.wins')}</th>
-                <th className="px-2 py-2 text-right font-medium">{t('stats.winPct')}</th>
-                <th className="px-2 py-2 text-right font-medium">{t('stats.best')}</th>
-                <th className="w-1/3 px-2 py-2 font-medium">{t('stats.average')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {leaderboard.map((s) => (
-                <tr key={s.player_id} className="border-t border-stone-100">
-                  <td className="py-2 pr-3">
-                    <span className="inline-flex items-center gap-2 font-medium">
-                      <PlayerDot color={s.color} /> {s.name}
-                    </span>
-                  </td>
-                  <td className="px-2 py-2 text-right tabular-nums">{s.games_played}</td>
-                  <td className="px-2 py-2 text-right tabular-nums">{s.wins}</td>
-                  <td className="px-2 py-2 text-right tabular-nums">{Math.round((s.wins / s.games_played) * 100)}%</td>
-                  <td className="px-2 py-2 text-right tabular-nums">{s.best_score}</td>
-                  <td className="px-2 py-2">
-                    <div className="flex items-center gap-2">
-                      <div className="h-2 flex-1 rounded-full bg-stone-100">
-                        <div
-                          className="h-2 rounded-full"
-                          style={{ width: `${(Number(s.avg_score) / maxAvg) * 100}%`, backgroundColor: s.color }}
-                        />
-                      </div>
-                      <span className="w-12 text-right tabular-nums">{s.avg_score}</span>
-                    </div>
-                  </td>
-                </tr>
+    <Card>
+      <h2 className="font-semibold">{t('stats.categoryAverages')}</h2>
+      <p className="mb-3 text-sm text-stone-500">{t('stats.categoryHelp', { n: MIN_GAMES })}</p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-stone-500">
+              <th className="py-2 pr-3 text-left font-medium">{t('calc.category')}</th>
+              {byPlayer.map(({ player }) => (
+                <th key={player.id} className="px-2 py-2 text-right font-medium">{player.name}</th>
               ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-
-      <Card>
-        <h2 className="mb-3 font-semibold">{t('stats.categoryAverages')}</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-stone-500">
-                <th className="py-2 pr-3 text-left font-medium">{t('calc.category')}</th>
-                {byPlayer.map(({ player }) => (
-                  <th key={player.id} className="px-2 py-2 text-right font-medium">{player.name}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {categories.map((c) => {
-                const values = byPlayer.map(({ rows }) => {
-                  const applicableRows = rows.filter(
-                    (row) =>
-                      !c.expansion ||
-                      row.expansions.includes(c.expansion) ||
-                      Object.hasOwn(row.breakdown, c.key),
-                  )
-                  const value = avg(applicableRows.map((row) => row.breakdown), c.key)
-                  return value === null ? null : Number(value)
-                })
-                const top = Math.max(...values.filter((value) => value !== null), 0)
-                return (
-                  <tr key={c.key} className="border-t border-stone-100">
-                    <td className="py-2 pr-3">{tr(c.label)}</td>
-                    {values.map((v, i) => (
-                      <td
-                        key={byPlayer[i].player.id}
-                        className={`px-2 py-2 text-right tabular-nums ${v !== null && v === top && byPlayer.length > 1 && v > 0 ? `font-bold ${def.theme.text}` : ''}`}
-                      >
-                        {v === null ? '–' : v.toFixed(1)}
-                      </td>
-                    ))}
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-        <p className="mt-2 text-xs text-stone-400">{t('stats.bestNote')}</p>
-      </Card>
-    </div>
+            </tr>
+          </thead>
+          <tbody>
+            {categories.map((c) => {
+              const values = byPlayer.map(({ rows }) => {
+                const applicable = rows.filter((row) => !c.expansion || row.expansions.includes(c.expansion) || Object.hasOwn(row.breakdown, c.key))
+                return avg(applicable.map((row) => row.breakdown), c.key)
+              })
+              const top = Math.max(...values.filter((v) => v !== null), 0)
+              return (
+                <tr key={c.key} className="border-t border-stone-100">
+                  <td className="py-2 pr-3">{tr(c.label)}</td>
+                  {values.map((v, i) => (
+                    <td
+                      key={byPlayer[i].player.id}
+                      className={`px-2 py-2 text-right tabular-nums ${v !== null && v === top && byPlayer.length > 1 && v > 0 ? 'font-bold text-stone-900' : 'text-stone-600'}`}
+                    >
+                      {v === null ? '–' : v.toFixed(1)}
+                    </td>
+                  ))}
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-2 text-xs text-stone-400">{t('stats.bestNote')}</p>
+    </Card>
   )
 }

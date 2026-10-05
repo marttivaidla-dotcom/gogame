@@ -18,7 +18,7 @@ export default function ScoreCalculator({ game, categories, players, inputs, onC
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-stone-200 bg-white shadow-sm">
+    <div className="overflow-x-auto rounded-lg border border-stone-200 bg-white">
       <table className="w-full border-collapse text-sm">
         <thead>
           <tr className={game.theme.soft}>
@@ -95,7 +95,6 @@ export default function ScoreCalculator({ game, categories, players, inputs, onC
                 <div className="text-xl font-bold tabular-nums">{totals[i]}</div>
                 {hasScores && players.length > 1 && (
                   <div className={`text-xs font-semibold ${places[i] === 1 ? game.theme.text : 'text-stone-400'}`}>
-                    {places[i] === 1 && '🏆 '}
                     {t('calc.place', { n: places[i] })}
                   </div>
                 )}

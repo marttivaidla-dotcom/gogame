@@ -59,10 +59,10 @@ function breakdownSignature(game) {
 
 /**
  * Tagastab { games, stats, warnings }.
- * games: [{ nr, savedAt, date, repeat, scores: [{ name, breakdown, total }] }], vanimast uuemani.
- * Iga rida on eraldi mäng ("Mängu nr" ei ole unikaalne). Vahele jäetakse ainult
- * mängijad, kellel nimi puudub või kõik punktid on 0, ja read, kus pole ühtegi mängijat.
- * repeat = true, kui samal päeval on juba täpselt sama tulemusega rida (kasutaja otsustab).
+ * games: [{ nr, savedAt, date, scores: [{ name, breakdown, total }] }], vanimast uuemani.
+ * Iga rida on eraldi mäng ("Mängu nr" ei ole unikaalne). Vahele jäetakse
+ * mängijad, kellel nimi puudub või kõik punktid on 0, read, kus pole ühtegi mängijat,
+ * ja duplikaadid: sama mängu numbri ja täpselt samade tulemustega rida (topelt salvestus).
  */
 export function parseLegacyWingspan(text) {
   const lines = text.split(/\r?\n/).filter((line) => line.trim())
@@ -70,7 +70,7 @@ export function parseLegacyWingspan(text) {
   const { nrCol, timeCol, players } = parseHeader(lines[0].split('\t'))
 
   const warnings = []
-  const stats = { rows: lines.length - 1, empty: 0, repeats: 0 }
+  const stats = { rows: lines.length - 1, empty: 0, duplicates: 0 }
   const rows = []
 
   for (const line of lines.slice(1)) {
@@ -103,13 +103,16 @@ export function parseLegacyWingspan(text) {
   rows.sort((a, b) => a.time - b.time)
 
   const seen = new Set()
-  const games = rows.map(({ time, ...row }) => {
-    const sig = `${row.date}|${breakdownSignature(row)}`
-    const repeat = seen.has(sig)
+  const games = []
+  for (const { time, ...row } of rows) {
+    const sig = `${row.nr}|${breakdownSignature(row)}`
+    if (seen.has(sig)) {
+      stats.duplicates += 1
+      continue
+    }
     seen.add(sig)
-    if (repeat) stats.repeats += 1
-    return { ...row, repeat }
-  })
+    games.push(row)
+  }
 
   return { games, stats, warnings }
 }

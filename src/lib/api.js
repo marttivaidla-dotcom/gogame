@@ -1,6 +1,7 @@
 import { supabase, isSupabaseConfigured } from './supabase'
+import { WINGSPAN_HISTORY } from '../data/wingspanHistory'
 import { gameSignature } from './legacyImport'
-import { PLAYER_COLORS } from './scoring'
+import { PLAYER_COLORS, placements } from './scoring'
 
 const STORAGE_KEY = 'skoorivihik:data:v1'
 
@@ -16,22 +17,72 @@ function friendlyError(error) {
   return error.message
 }
 
+function newId() {
+  return crypto.randomUUID()
+}
+
+const nameKey = (name) => name.trim().toLocaleLowerCase('et')
+
+// Mängijate tulemused koos summa ja kohaga (võrdse summa korral jagatakse koht: 1, 1, 3)
+function scoreRows(gameId, scores) {
+  const totals = scores.map((s) => Object.values(s.breakdown).reduce((sum, v) => sum + (Number(v) || 0), 0))
+  const places = placements(totals)
+  return scores.map((s, i) => ({
+    id: newId(),
+    game_id: gameId,
+    player_id: s.player_id,
+    breakdown: s.breakdown,
+    total: totals[i],
+    placement: places[i],
+  }))
+}
+
+// Esimesel kasutamisel (brauseris pole veel andmeid) algab kohalik salvestus varasemate mängudega
+function historyStore() {
+  const players = []
+  const byName = new Map()
+  const games = WINGSPAN_HISTORY.map((g) => {
+    const gameId = newId()
+    const scores = g.scores.map((s) => {
+      if (!byName.has(nameKey(s.name))) {
+        const player = {
+          id: newId(),
+          name: s.name,
+          color: PLAYER_COLORS[players.length % PLAYER_COLORS.length],
+          created_at: new Date().toISOString(),
+        }
+        players.push(player)
+        byName.set(nameKey(s.name), player)
+      }
+      return { player_id: byName.get(nameKey(s.name)).id, breakdown: s.breakdown }
+    })
+    return {
+      id: gameId,
+      game_type: 'wingspan',
+      played_at: g.date,
+      expansions: [],
+      notes: null,
+      created_at: new Date(g.savedAt.replace(' ', 'T')).toISOString(),
+      game_scores: scoreRows(gameId, scores),
+    }
+  })
+  return { players, games }
+}
+
 function readLocalStore() {
   const raw = localStorage.getItem(STORAGE_KEY)
-  if (!raw) return { players: [], games: [] }
-  const store = JSON.parse(raw)
-  if (!Array.isArray(store.players) || !Array.isArray(store.games)) {
-    throw new Error('Kohalikud mänguandmed on vigased. Ekspordi andmed enne nende parandamist.')
+  if (!raw) {
+    const store = historyStore()
+    writeLocalStore(store)
+    return store
   }
+  const store = JSON.parse(raw)
+  if (!Array.isArray(store.players) || !Array.isArray(store.games)) throw new Error('errors.badLocalData')
   return store
 }
 
 function writeLocalStore(store) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(store))
-}
-
-function newId() {
-  return crypto.randomUUID()
 }
 
 function localPlayerStats(gameType) {
@@ -75,7 +126,7 @@ export async function fetchPlayers() {
 export async function addPlayer(name, color) {
   if (!isSupabaseConfigured) {
     const store = readLocalStore()
-    if (store.players.some((player) => player.name.toLocaleLowerCase() === name.trim().toLocaleLowerCase())) {
+    if (store.players.some((player) => nameKey(player.name) === nameKey(name))) {
       throw new Error('errors.duplicateName')
     }
     const player = { id: newId(), name: name.trim(), color, created_at: new Date().toISOString() }
@@ -88,7 +139,7 @@ export async function addPlayer(name, color) {
 export async function updatePlayer(id, fields) {
   if (!isSupabaseConfigured) {
     const store = readLocalStore()
-    if (store.players.some((player) => player.id !== id && player.name.toLocaleLowerCase() === fields.name.trim().toLocaleLowerCase())) {
+    if (store.players.some((player) => player.id !== id && nameKey(player.name) === nameKey(fields.name))) {
       throw new Error('errors.duplicateName')
     }
     const players = store.players.map((player) => player.id === id ? { ...player, ...fields } : player)
@@ -111,21 +162,10 @@ export async function deletePlayer(id) {
 }
 
 // ---------- Mängud ----------
-export async function createGame({ gameType, playedAt, expansions = [], notes, scores }) {
+export async function createGame({ gameType, playedAt, expansions = [], notes = '', scores }) {
   if (!isSupabaseConfigured) {
     const store = readLocalStore()
     const gameId = newId()
-    const gameScores = scores.map((score) => ({
-      id: newId(),
-      game_id: gameId,
-      player_id: score.player_id,
-      breakdown: score.breakdown,
-      total: Object.values(score.breakdown).reduce((sum, value) => sum + Number(value || 0), 0),
-      placement: 1,
-    }))
-    for (const score of gameScores) {
-      score.placement = gameScores.filter((other) => other.total > score.total).length + 1
-    }
     const game = {
       id: gameId,
       game_type: gameType,
@@ -133,7 +173,7 @@ export async function createGame({ gameType, playedAt, expansions = [], notes, s
       expansions,
       notes: notes.trim() || null,
       created_at: new Date().toISOString(),
-      game_scores: gameScores,
+      game_scores: scoreRows(gameId, scores),
     }
     writeLocalStore({ ...store, games: [...store.games, game] })
     return gameId
@@ -149,24 +189,64 @@ export async function createGame({ gameType, playedAt, expansions = [], notes, s
   )
 }
 
+// Mängu muutmine: kuupäev, laiendused, märkmed ja kõigi mängijate punktid asendatakse
+export async function updateGame(id, { playedAt, expansions = [], notes = '', scores }) {
+  const rows = scoreRows(id, scores)
+  if (!isSupabaseConfigured) {
+    const store = readLocalStore()
+    const games = store.games.map((game) =>
+      game.id === id
+        ? { ...game, played_at: playedAt, expansions, notes: notes.trim() || null, game_scores: rows }
+        : game,
+    )
+    writeLocalStore({ ...store, games })
+    return id
+  }
+  unwrap(
+    await supabase.from('games').update({ played_at: playedAt, expansions, notes: notes.trim() || null }).eq('id', id),
+  )
+  unwrap(await supabase.from('game_scores').delete().eq('game_id', id))
+  unwrap(await supabase.from('game_scores').insert(rows.map(({ id: _rowId, ...row }) => row)))
+  return id
+}
+
+const GAME_SELECT =
+  'id, game_type, played_at, expansions, notes, created_at, game_scores(id, total, placement, breakdown, player:players(id, name, color))'
+
+function withPlayers(store, game) {
+  return {
+    ...game,
+    expansions: game.expansions ?? [],
+    game_scores: game.game_scores.map((score) => ({
+      ...score,
+      player: store.players.find((player) => player.id === score.player_id),
+    })),
+  }
+}
+
+export async function fetchGame(id) {
+  if (!isSupabaseConfigured) {
+    const store = readLocalStore()
+    const game = store.games.find((item) => item.id === id)
+    if (!game) throw new Error('errors.gameNotFound')
+    return withPlayers(store, game)
+  }
+  const game = unwrap(await supabase.from('games').select(GAME_SELECT).eq('id', id).maybeSingle())
+  if (!game) throw new Error('errors.gameNotFound')
+  return game
+}
+
 export async function fetchGames(gameType) {
   if (!isSupabaseConfigured) {
     const store = readLocalStore()
     return store.games
       .filter((game) => !gameType || game.game_type === gameType)
-      .map((game) => ({
-        ...game,
-        expansions: game.expansions ?? [],
-        game_scores: game.game_scores.map((score) => ({
-          ...score,
-          player: store.players.find((player) => player.id === score.player_id),
-        })),
-      }))
+      .map((game) => withPlayers(store, game))
       .sort((a, b) => b.played_at.localeCompare(a.played_at) || b.created_at.localeCompare(a.created_at))
   }
   let query = supabase
     .from('games')
-    .select('id, game_type, played_at, expansions, notes, created_at, game_scores(id, total, placement, breakdown, player:players(id, name, color))')
+    .select(GAME_SELECT)
     .order('played_at', { ascending: false })
     .order('created_at', { ascending: false })
   if (gameType) query = query.eq('game_type', gameType)
@@ -183,18 +263,19 @@ export async function deleteGame(id) {
 }
 
 // ---------- Import ----------
-// games: parseLegacyWingspan() väljund. Puuduvad mängijad luuakse nime järgi.
+export { WINGSPAN_HISTORY }
+
+// games: parseLegacyWingspan() väljund või WINGSPAN_HISTORY. Puuduvad mängijad luuakse nime järgi.
 // Juba olemasolevaid mänge (sama kuupäev, mängijad ja summad) ei lisata uuesti,
 // arvestades kordusi: kui andmebaasis on sama mäng 1 kord ja impordis 2 korda, lisatakse 1.
 export async function importGames(gameType, games, onProgress) {
-  const key = (name) => name.trim().toLocaleLowerCase('et')
   const players = await fetchPlayers()
-  const byName = new Map(players.map((p) => [key(p.name), p]))
+  const byName = new Map(players.map((p) => [nameKey(p.name), p]))
   let playersCreated = 0
   for (const name of new Set(games.flatMap((g) => g.scores.map((s) => s.name)))) {
-    if (byName.has(key(name))) continue
+    if (byName.has(nameKey(name))) continue
     const color = PLAYER_COLORS[(players.length + playersCreated) % PLAYER_COLORS.length]
-    byName.set(key(name), await addPlayer(name, color))
+    byName.set(nameKey(name), await addPlayer(name, color))
     playersCreated += 1
   }
 
@@ -216,8 +297,7 @@ export async function importGames(gameType, games, onProgress) {
       await createGame({
         gameType,
         playedAt: game.date,
-        notes: '',
-        scores: game.scores.map((s) => ({ player_id: byName.get(key(s.name)).id, breakdown: s.breakdown })),
+        scores: game.scores.map((s) => ({ player_id: byName.get(nameKey(s.name)).id, breakdown: s.breakdown })),
       })
       imported += 1
     }

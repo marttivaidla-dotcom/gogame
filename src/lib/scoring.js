@@ -137,12 +137,23 @@ export function visibleCategories(gameKey, enabledExpansions = []) {
   return GAMES[gameKey].categories.filter((c) => !c.expansion || enabledExpansions.includes(c.expansion))
 }
 
-// Ühe kategooria punktid kasutaja sisendist
+// Ühe kategooria punktid kasutaja sisendist (negatiivseid punkte mängudes pole)
 export function categoryPoints(category, input) {
+  const count = (value) => Math.max(0, toInt(value))
   if (category.kind === 'coinsItems') {
-    return toInt(input?.coins) + Math.floor(toInt(input?.items) / 4)
+    return count(input?.coins) + Math.floor(count(input?.items) / 4)
   }
-  return toInt(input)
+  return count(input)
+}
+
+// Salvestatud punktid → kalkulaatori sisend (mängu muutmiseks).
+// Müntide ja esemete jaotust ei salvestata, seega läheb kogu summa müntide alla.
+export function breakdownToInputs(categories, breakdown = {}) {
+  return Object.fromEntries(
+    categories
+      .filter((c) => breakdown[c.key] != null)
+      .map((c) => [c.key, c.kind === 'coinsItems' ? { coins: String(breakdown[c.key]), items: '' } : String(breakdown[c.key])]),
+  )
 }
 
 // { kategooria: sisend } → { kategooria: punktid }
