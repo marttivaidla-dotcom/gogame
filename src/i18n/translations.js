@@ -31,6 +31,7 @@ export const translations = {
     'newGame.selectPlayer': 'Vali vähemalt üks mängija.',
     'newGame.save': 'Salvesta {game} mäng',
     'newGame.saving': 'Salvestan…',
+    'newGame.saveShort': 'Salvesta',
 
     'editGame.title': 'Muuda mängu',
     'editGame.subtitle': 'Mäng {date}. Muuda kuupäeva, mängijaid või punkte ja salvesta.',
@@ -154,6 +155,7 @@ export const translations = {
     'newGame.selectPlayer': 'Select at least one player.',
     'newGame.save': 'Save {game} game',
     'newGame.saving': 'Saving…',
+    'newGame.saveShort': 'Save',
 
     'editGame.title': 'Edit game',
     'editGame.subtitle': 'Game on {date}. Change the date, players or points and save.',

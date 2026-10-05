@@ -4,7 +4,7 @@ import ScoreCalculator from '../components/ScoreCalculator'
 import { Card, ErrorBox, Loading, PageTitle, PlayerDot, useLoader } from '../components/ui'
 import { useI18n } from '../i18n/I18nProvider'
 import { createGame, fetchGame, fetchPlayers, updateGame } from '../lib/api'
-import { GAMES, GAME_LIST, breakdownToInputs, computeBreakdown, formatDate, visibleCategories } from '../lib/scoring'
+import { GAMES, GAME_LIST, breakdownToInputs, computeBreakdown, formatDate, sumBreakdown, visibleCategories } from '../lib/scoring'
 
 const today = () => new Date().toLocaleDateString('sv-SE') // YYYY-MM-DD kohalikus ajas
 
@@ -180,22 +180,39 @@ function GameForm({ allPlayers, game: existing }) {
             </label>
           </Card>
 
-          <div className="mt-6">
+          {/* Ujuv salvestusriba: kerimisel jääb ekraani alla (mobiilis navigatsiooni kohale) */}
+          <div className="sticky bottom-[calc(3rem+env(safe-area-inset-bottom))] z-30 -mx-4 mt-6 border-t border-stone-200 bg-white/95 px-4 py-3 shadow-[0_-4px_12px_rgba(0,0,0,0.06)] backdrop-blur sm:bottom-0 sm:mx-0 sm:rounded-t-lg sm:border-x">
             <ErrorBox>{error}</ErrorBox>
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex min-w-0 flex-1 flex-wrap gap-x-3 gap-y-1 text-sm">
+                {selectedPlayers.map((p) => (
+                  <span key={p.id} className="inline-flex items-center gap-1.5" title={p.name}>
+                    <PlayerDot color={p.color} />
+                    <span className="max-w-20 truncate text-stone-500">{p.name}</span>
+                    <span className="font-bold tabular-nums">{sumBreakdown(computeBreakdown(categories, inputs[p.id]))}</span>
+                  </span>
+                ))}
+              </div>
+              {existing && (
+                <Link to="/ajalugu" className="shrink-0 text-sm text-stone-500 hover:text-stone-900">
+                  {t('players.cancel')}
+                </Link>
+              )}
               <button
                 type="button"
                 onClick={handleSave}
                 disabled={saving}
-                className="w-full rounded-md bg-stone-900 px-6 py-2.5 font-semibold text-white hover:bg-stone-700 disabled:opacity-60 sm:w-auto"
+                className="shrink-0 rounded-md bg-stone-900 px-5 py-2.5 font-semibold text-white hover:bg-stone-700 disabled:opacity-60"
               >
-                {saving ? t('newGame.saving') : existing ? t('editGame.save') : t('newGame.save', { game: game.name })}
+                {saving ? (
+                  t('newGame.saving')
+                ) : (
+                  <>
+                    <span className="sm:hidden">{t('newGame.saveShort')}</span>
+                    <span className="hidden sm:inline">{existing ? t('editGame.save') : t('newGame.save', { game: game.name })}</span>
+                  </>
+                )}
               </button>
-              {existing && (
-                <Link to="/ajalugu" className="text-sm text-stone-500 hover:text-stone-900">
-                  {t('players.cancel')}
-                </Link>
-              )}
             </div>
           </div>
         </>
